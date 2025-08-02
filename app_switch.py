@@ -2,7 +2,7 @@ import sys
 import time
 import psutil
 from functools import partial
-from threading import Thread, Event
+from threading import Thread, Event, Lock
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QCheckBox, QLabel, QPushButton, 
     QLineEdit, QMessageBox
@@ -36,17 +36,25 @@ def process_name_checker(proc, names: list):
         names = [names]
     try:
         return any(name.lower() in (proc.info['name'] or "").lower() for name in names)
-    except KeyError:
+    except (KeyError, AttributeError):
         return False
 
 def kill_processes(names: list):
     """Kills all processes that match the names in the provided list."""
+    killed_count = 0
     for proc in psutil.process_iter(['pid', 'name']):
         try:
             if process_name_checker(proc, names):
                 proc.kill()
+                killed_count += 1
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # These exceptions are expected and can be safely ignored
             pass
+        except Exception as e:
+            # Log unexpected errors but don't crash
+            print(f"Unexpected error killing process {proc.pid}: {e}")
+    
+    return killed_count
 
 class AppSwitch(QWidget):
     def __init__(self):
@@ -63,6 +71,9 @@ class AppSwitch(QWidget):
             "meta": False,
             "overwolf": False,
         }
+        
+        # Add lock for thread safety
+        self.killList_lock = Lock()
         
         self.layout = QVBoxLayout()
 
@@ -100,31 +111,53 @@ class AppSwitch(QWidget):
         """Adds a user-defined application to the kill list."""
         app_name = self.input_field.text().strip().lower()
         if not app_name:
+            QMessageBox.warning(self, "Invalid Input", "Please enter an application name.")
             return
-        if app_name in self.killList:
-            QMessageBox.warning(self, "Duplicate", f"{app_name.capitalize()} is already in the list!")
+        
+        # Basic validation - check for common invalid characters
+        if any(char in app_name for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']):
+            QMessageBox.warning(self, "Invalid Input", "Application name contains invalid characters.")
             return
-        self.killList[app_name] = False
-        self.add_checkbox(app_name)
-        self.input_field.clear()
+            
+        with self.killList_lock:
+            if app_name in self.killList:
+                QMessageBox.warning(self, "Duplicate", f"{app_name.capitalize()} is already in the list!")
+                return
+            self.killList[app_name] = False
+            self.add_checkbox(app_name)
+            self.input_field.clear()
 
     def closeEvent(self, event):
         """Ensures the background thread is stopped before closing the app."""
         self.stop_event.set()
-        self.kill_thread.join()
+        # Use timeout to prevent blocking
+        self.kill_thread.join(timeout=2.0)
+        if self.kill_thread.is_alive():
+            print("Warning: Background thread did not stop gracefully")
         event.accept()
 
     def kill_loop(self):
         """Continuously checks and kills selected applications."""
         while not self.stop_event.is_set():
-            to_kill = [app for app, active in self.killList.items() if active]
-            if to_kill:
-                kill_processes(to_kill)  # Kill all at once instead of multiple function calls
+            try:
+                # Thread-safe access to killList
+                with self.killList_lock:
+                    to_kill = [app for app, active in self.killList.items() if active]
+                
+                if to_kill:
+                    killed = kill_processes(to_kill)
+                    if killed > 0:
+                        print(f"Killed {killed} processes")
+                        
+            except Exception as e:
+                print(f"Error in kill loop: {e}")
+                
             time.sleep(0.2)  # Reduce CPU usage while maintaining effectiveness
 
     def toggle(self, var, state):
         """Updates the kill list based on the checkbox state."""
-        self.killList[var] = state == 2  # Only toggle when fully checked
+        with self.killList_lock:
+            self.killList[var] = state == 2  # Only toggle when fully checked
 
 app = QApplication(sys.argv)
 window = AppSwitch()
