@@ -1,3 +1,5 @@
+<img width="350" height="366" alt="image" src="https://github.com/user-attachments/assets/74a2b726-2770-463e-b3f2-276702e39f88" />
+
 # App-Switch: Close Programs You Don’t Want
 App-Switch lets you easily close apps that are running on your PC. It searches for the app you want to close and shuts it down. If the app tries to start up again, App-Switch will keep making sure it stays closed—unless you turn it off. *(Works on Windows with Python 3.11.9)*
 
@@ -18,7 +20,7 @@ Right-click the `.zip` file and choose **Extract All**. Pres **Enter** and wait 
 
 *(If there’s another folder with the same name inside, open that first to find `app_switch`.)*
 
-⚠️ **Note**: You might see a warning since the app will close other programs.
+⚠️ **Note**: You will see a warning since the app will close other programs. Click more info then run anyway.
 
 ## 🐍 How to Use (With Python Installed)
 
@@ -43,4 +45,4 @@ If you have Python 3.11.9 or higher installed, follow these steps to get App-Swi
   ```bash
   python app_switch.py
   ```
-⚠️ **Note**: If you get any errors, make sure you’re using Python 3.11.9 by running `python --version`.
+⚠️ **Note**: If you get any errors, make sure you’re using Python 3.11.9 by running `python --version`. It is tested to work on 3.11.9 and 3.13
